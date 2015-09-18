@@ -8,7 +8,7 @@ PASSIVE = 0
 ACTIVE = 1
 
 class Moshpit(object):
-    def __init__(self, N=500, phi=0.7, fraction=0.18, beta=1, epsilon=120, T=1, dt=1e-2):
+    def __init__(self, N=500, phi=0.85, fraction=0.18, beta=1, epsilon=120, T=1, dt=1e-2):
         """
         Creates a moshpit simulation of active and passive moshers according to
         the paper arXiv:1302.1886.  By default, creates particles in a random
