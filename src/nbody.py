@@ -1,15 +1,13 @@
+import display
+
 import numpy as np
 import scipy as sp
-
-import matplotlib.pyplot as pl
-from matplotlib.patches import Circle
-from matplotlib.collections import PatchCollection
 
 PASSIVE = 0
 ACTIVE = 1
 
 class Moshpit(object):
-    def __init__(self, N=500, phi=0.7, fraction=0.3, beta=1, epsilon=120, T=1, dt=1e-2):
+    def __init__(self, N=500, phi=0.7, fraction=0.18, beta=1, epsilon=120, T=1, dt=1e-2):
         """
         Creates a moshpit simulation of active and passive moshers according to
         the paper arXiv:1302.1886.  By default, creates particles in a random
@@ -119,108 +117,36 @@ class Moshpit(object):
         self.vel += self.forces*self.dt
         self.pos += self.vel*self.dt
     
-    def step(self, steps=1, display_interval=20, plot=None, force_func=None):
-        """ Perform a set of integration / BC steps and update plot """
+    def step(self, steps=1, display_interval=20, disp=None, force_func=None):
+        """
+        Perform a set of integration / BC steps and update plot
+
+        Parameters:
+        -----------
+        steps : int
+            number of time steps of size self.dt to perform
+
+        display_interval : int
+            number time steps between display updates. this is introduced since
+            the application is often draw limited
+
+        disp : `display.Display' object
+            the particular display to update (can be None)
+
+        force_func : function
+            pairwise force function (takes Moshpit and returns forces (ndarray(N,2]))
+        """
         for step in xrange(steps):
             self.integrate(force_func)
             self.boundary_condition()
     
-            if step % display_interval == 0 and plot is not None:
-                plot.update(self)
-
-
-
-class DisplayDiscs(object):
-    def __init__(self, sim):
-        """
-        Display the current configuration of particles using mpl patches.  If
-        given a previous figure and patch list, update them and redraw to save
-        some time.
-
-        Parameters:
-        -----------
-        sim : `Moshpit' object
-            the simulation / particle configuration to display
-        """
-        pl.show(block=False)
-        self.fig = pl.figure(figsize=(10,10))
-        self.ax = self.fig.add_axes([0,0,1,1])
-
-        x,y = sim.pos.T
-        rad = sim.rad
-        box = sim.box
-        typ = sim.typ
-
-        self.ax.set_xlim(0, box[0])
-        self.ax.set_ylim(0, box[1])
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
-        self.ax.grid(b=False, which='both', axis='both')
-
-        color_func = lambda t: '#555555' if t == PASSIVE else '#770000'
-        colors = map(color_func, typ)
-
-        self.patches = [Circle((i,j), s, color=c, alpha=0.5) for i,j,s,c in zip(x,y,rad,colors)]
-        [self.ax.add_patch(p) for p in self.patches]
-        
-    def update(self, sim):
-        """ Update the display with the simulation """
-        x,y = sim.pos.T
-
-        for patch,i,j in zip(self.patches, x, y):
-            patch.center = (i,j)
-        
-        pl.draw()
-        pl.show()
-
-class DisplayPoints(object):
-    def __init__(self, sim):
-        """
-        Display the current configuration of particles using plain 'ol line
-        collections from pl.plot -- much faster than the patches
-
-        Parameters:
-        -----------
-        sim : `Moshpit' object
-            the simulation / particle configuration to display
-        """
-        pl.show(block=False)
-
-        self.fig = pl.figure(figsize=(10,10))
-        self.ax = self.fig.add_axes([0,0,1,1])
-
-        x,y = sim.pos.T
-        rad = sim.rad
-        box = sim.box
-        typ = sim.typ
-
-        self.ax.set_xlim(0, box[0])
-        self.ax.set_ylim(0, box[1])
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
-
-        self.ax.grid(b=False, which='both', axis='both')
-
-        act = typ == ACTIVE
-        pas = typ == PASSIVE
-        self.plots_passive, = self.ax.plot(x[pas],y[pas],'ko')
-        self.plots_active, = self.ax.plot(x[act],y[act],'ro')
-
-    def update(self, sim):
-        """ Update the display with the simulation """
-        x,y = sim.pos.T
-        typ = sim.typ
-
-        act = typ == ACTIVE
-        pas = typ == PASSIVE
-        self.plots_passive.set_data(x[pas],y[pas])
-        self.plots_active.set_data(x[act],y[act])
-
-        pl.draw()
+            if step % display_interval == 0 and disp is not None:
+                disp.update(self)
 
 def force1(sim):
     N = sim.N
     pos = sim.pos
+    dia = 2*sim.radius
 
     f = np.zeros_like(pos)
     for i in xrange(N):
@@ -229,26 +155,27 @@ def force1(sim):
                 rij = pos[i] - pos[j]
                 dist = np.sqrt((rij**2).sum())
 
-                if dist < 2.0:
-                    f[i] += sim.epsilon*(1-dist/2.0)**(1.5) * rij/dist
+                if dist < dia:
+                    f[i] += sim.epsilon*(1-dist/dia)**(1.5) * rij/dist
 
     return f
 
 def force2(sim):
     N = sim.N
     pos = sim.pos
+    dia = 2*sim.radius
 
     f = np.zeros_like(pos)
     for i in xrange(N):
         rij = pos[i] - pos
         dist = np.sqrt((rij**2).sum(axis=-1))
 
-        mask = (dist > 0)&(dist < 2)
+        mask = (dist > 0)&(dist < dia)
         rij = rij[mask]
         dist = dist[mask][:,None]
 
         if len(rij) > 0:
-            forces = sim.epsilon*(1-dist/2.0)**(1.5) * rij/dist
+            forces = sim.epsilon*(1-dist/dia)**(1.5) * rij/dist
             f[i] += forces.sum(axis=0)
 
     return f
@@ -272,17 +199,15 @@ def _inner_naive(pos, N, eps, f):
     return f
 
 def force3(sim):
-    N = sim.N
-    pos = sim.pos
-
-    f = np.zeros_like(pos)
-    return _inner_naive(pos, N, sim.epsilon, f)
+    force = np.zeros_like(sim.pos)
+    return _inner_naive(sim.pos, sim.N, sim.epsilon, force)
 
 @jit(nopython=True)
 def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
+    nper = box[0]/nside
     for i in xrange(N):
-        ix = int((pos[i,0] / box[0]) * nside)
-        iy = int((pos[i,1] / box[1]) * nside)
+        ix = int((pos[i,0] / nper))
+        iy = int((pos[i,1] / nper))
 
         c = counts[ix,iy]
         cells[ix,iy,c] = i
@@ -307,15 +232,12 @@ def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
     return f
 
 def force4(sim):
-    N = sim['N']
-    pos = sim['pos']
-    box = sim['box']
-
-    f = np.zeros_like(pos)
-    nside = int(box[0]/2.1)
+    force = np.zeros_like(sim.pos)
+    nside = int(sim.box[0]/(sim.radius*2.05))
     nside = nside if nside > 0 else 1
 
     cells = np.zeros((nside, nside, 10), dtype='int')
     counts = np.zeros((nside, nside), dtype='int')
-    return _nbl_forces(cells, counts, nside, box, pos, N, sim['epsilon'], f)
+
+    return _nbl_forces(cells, counts, nside, sim.box, sim.pos, sim.N, sim.epsilon, force)
 
