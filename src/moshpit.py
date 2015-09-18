@@ -8,7 +8,7 @@ PASSIVE = 0
 ACTIVE = 1
 
 class Moshpit(object):
-    def __init__(self, N=500, phi=0.85, fraction=0.18, beta=1, epsilon=120, T=1, dt=1e-2):
+    def __init__(self, N=500, phi=0.85, fraction=0.18, beta=1, epsilon=120, T=1, dt=1e-2, v0=1.0):
         """
         Creates a moshpit simulation of active and passive moshers according to
         the paper arXiv:1302.1886.  By default, creates particles in a random
@@ -44,6 +44,7 @@ class Moshpit(object):
         self.fraction = fraction
         self.beta = beta
         self.epsilon = epsilon
+        self.v0 = v0
         self.T = T
         self.dt = dt
 
@@ -81,7 +82,10 @@ class Moshpit(object):
 
     def force_damp(self):
         """ Calculate the damping force -beta v """
-        return -self.beta * self.vel
+        v0 = self.v0 * (self.typ == ACTIVE)[:,None]
+        vlen = np.sqrt((self.vel**2).sum(axis=-1))[:,None]
+
+        return self.beta * (v0 - vlen) * self.vel / (vlen + 1e-6)
     
     def force_noise(self):
         """ Calculate the effective force of the Langevin dynamics """
