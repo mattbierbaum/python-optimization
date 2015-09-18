@@ -1,2 +1,3 @@
 *.pyc
 nbs/.ipynb_checkpoints
+nbs/optimization.html

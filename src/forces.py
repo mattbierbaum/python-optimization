@@ -26,6 +26,20 @@ def force2(sim):
     pos = sim.pos
     dia = 2*sim.radius
 
+    rij = pos[:,None,:] - pos[None,:,:]
+    dist = np.sqrt((rij**2).sum(axis=-1))
+    
+    dist[np.eye(sim.N)==1.] = 1e3
+    dist = dist[:,:,None]
+    forces = (sim.epsilon*(1-dist/dia)**2 * rij/dist * (dist < dia)).sum(axis=1)
+
+    return forces
+
+def force3(sim):
+    N = sim.N
+    pos = sim.pos
+    dia = 2*sim.radius
+
     f = np.zeros_like(pos)
     for i in xrange(N):
         rij = pos[i] - pos
@@ -40,20 +54,6 @@ def force2(sim):
             f[i] += forces.sum(axis=0)
 
     return f
-
-def force3(sim):
-    N = sim.N
-    pos = sim.pos
-    dia = 2*sim.radius
-
-    rij = pos[:,None,:] - pos[None,:,:]
-    dist = np.sqrt((rij**2).sum(axis=-1))
-    
-    dist[np.eye(sim.N)==1.] = 1e3
-    dist = dist[:,:,None]
-    forces = (sim.epsilon*(1-dist/dia)**2 * rij/dist * (dist < dia)).sum(axis=1)
-
-    return forces
 
 @jit(nopython=True)
 def _inner_naive(pos, N, eps, f):
