@@ -20,8 +20,8 @@ class DisplayDiscs(object):
         sim : `Moshpit' object
             the simulation / particle configuration to display
         """
-        pl.show(block=False)
-        self.fig = pl.figure(figsize=(10,10))
+        #pl.show(block=False)
+        self.fig = pl.figure(figsize=(6,6))
         self.ax = self.fig.add_axes([0,0,1,1])
 
         x,y = sim.pos.T
@@ -35,10 +35,10 @@ class DisplayDiscs(object):
         self.ax.set_yticks([])
         self.ax.grid(b=False, which='both', axis='both')
 
-        color_func = lambda t: '#555555' if t == PASSIVE else '#770000'
+        color_func = lambda t: '#222222' if t == PASSIVE else '#DD0000'
         colors = map(color_func, typ)
 
-        self.patches = [Circle((i,j), s, color=c, alpha=0.5) for i,j,s,c in zip(x,y,rad,colors)]
+        self.patches = [Circle((i,j), s, ec=None, fc=c, alpha=0.75) for i,j,s,c in zip(x,y,rad,colors)]
         [self.ax.add_patch(p) for p in self.patches]
         
     def update(self, sim):
@@ -62,10 +62,10 @@ class DisplayPoints(object):
         sim : `Moshpit' object
             the simulation / particle configuration to display
         """
-        pl.show(block=False)
+        #pl.show(block=False)
 
         # create a square, full-figure axis
-        self.fig = pl.figure(figsize=(10,10))
+        self.fig = pl.figure(figsize=(6,6))
         self.ax = self.fig.add_axes([0,0,1,1])
 
         # style the plot a bit cleaner

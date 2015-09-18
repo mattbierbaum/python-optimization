@@ -1,4 +1,5 @@
 import display
+import forces
 
 import numpy as np
 import scipy as sp
@@ -98,7 +99,7 @@ class Moshpit(object):
             self.pos[mask,i] = 2*self.box[i]-self.pos[mask,i]
             self.vel[mask,i] *= -1
     
-    def integrate(self, force_func=None):
+    def integrate(self, forces):
         """
         Integrate the equations of motion. For this simple integrator, we are
         using the simplest sympletic integrator, NSV where
@@ -108,13 +109,10 @@ class Moshpit(object):
 
         Parameters:
         -----------
-        force_func : function(self) -> forces (ndarray[N,2])
-            a function which takes a Moshpit and returns the pair forces
-            on each particle from the others.  separated from the class
-            for pedagogy
+        forces : ndarray[N,2]
+            the forces on each particle
         """
-        self.forces = force_func(self) + self.force_damp() + self.force_noise()
-        self.vel += self.forces*self.dt
+        self.vel += forces*self.dt
         self.pos += self.vel*self.dt
     
     def step(self, steps=1, display_interval=20, disp=None, force_func=None):
@@ -134,110 +132,22 @@ class Moshpit(object):
             the particular display to update (can be None)
 
         force_func : function
-            pairwise force function (takes Moshpit and returns forces (ndarray(N,2]))
+            a function which takes a Moshpit and returns the pair forces
+            on each particle from the others.  separated from the class
+            for pedagogy
         """
         for step in xrange(steps):
-            self.integrate(force_func)
+            self.forces = force_func(self) + self.force_damp() + self.force_noise()
+            self.integrate(self.forces)
             self.boundary_condition()
     
             if step % display_interval == 0 and disp is not None:
                 disp.update(self)
 
-def force1(sim):
-    N = sim.N
-    pos = sim.pos
-    dia = 2*sim.radius
-
-    f = np.zeros_like(pos)
-    for i in xrange(N):
-        for j in xrange(N):
-            if i != j:
-                rij = pos[i] - pos[j]
-                dist = np.sqrt((rij**2).sum())
-
-                if dist < dia:
-                    f[i] += sim.epsilon*(1-dist/dia)**(1.5) * rij/dist
-
-    return f
-
-def force2(sim):
-    N = sim.N
-    pos = sim.pos
-    dia = 2*sim.radius
-
-    f = np.zeros_like(pos)
-    for i in xrange(N):
-        rij = pos[i] - pos
-        dist = np.sqrt((rij**2).sum(axis=-1))
-
-        mask = (dist > 0)&(dist < dia)
-        rij = rij[mask]
-        dist = dist[mask][:,None]
-
-        if len(rij) > 0:
-            forces = sim.epsilon*(1-dist/dia)**(1.5) * rij/dist
-            f[i] += forces.sum(axis=0)
-
-    return f
-
-from math import sqrt
-from numba import jit
-
-@jit(nopython=True)
-def _inner_naive(pos, N, eps, f):
-    for i in xrange(N):
-        for j in xrange(N):
-            if i != j:
-                x = pos[i,0] - pos[j,0]
-                y = pos[i,1] - pos[j,1]
-                dist = sqrt(x*x + y*y)
-
-                if dist < 2.0:
-                    c = eps*(1-dist/2.0)**(1.5)
-                    f[i][0] += c * x/dist
-                    f[i][1] += c * y/dist
-    return f
-
-def force3(sim):
-    force = np.zeros_like(sim.pos)
-    return _inner_naive(sim.pos, sim.N, sim.epsilon, force)
-
-@jit(nopython=True)
-def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
-    nper = box[0]/nside
-    for i in xrange(N):
-        ix = int((pos[i,0] / nper))
-        iy = int((pos[i,1] / nper))
-
-        c = counts[ix,iy]
-        cells[ix,iy,c] = i
-        counts[ix,iy] += 1
-
-    for i in xrange(N):
-        ix = int((pos[i,0] / box[0]) * nside)
-        iy = int((pos[i,1] / box[1]) * nside)
-
-        for tx in xrange(max(0,ix-1), min(ix+2, nside)):
-            for ty in xrange(max(0,iy-1), min(iy+2, nside)):
-                for c in xrange(counts[tx,ty]):
-                    ind = cells[tx,ty,c]
-                    x = pos[i,0] - pos[ind,0]
-                    y = pos[i,1] - pos[ind,1]
-                    dist = sqrt(x*x + y*y)
-
-                    if dist < 2.0 and dist > 0:
-                        c = eps*(1-dist/2.0)**(1.5)
-                        f[i][0] += c * x/dist
-                        f[i][1] += c * y/dist
-    return f
-
-def force4(sim):
-    force = np.zeros_like(sim.pos)
-    nside = int(sim.box[0]/(sim.radius*2.05))
-    nside = nside if nside > 0 else 1
-
-    cells = np.zeros((nside, nside, 10), dtype='int')
-    counts = np.zeros((nside, nside), dtype='int')
-
-    return _nbl_forces(cells, counts, nside, sim.box, sim.pos, sim.N, sim.epsilon, force)
+    def relax(self):
+        """ Relax the current configuration using just pair wise forces (no noise) """
+        for step in xrange(1000):
+            self.forces = forces.force5(self) + self.force_damp()
+            self.integrate(self.forces)
+            self.boundary_condition()
 
