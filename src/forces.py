@@ -76,30 +76,35 @@ def force4(sim):
 
 @jit(nopython=True)
 def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
+    bfactor = nside / box[0]
     for i in xrange(N):
-        ix = int((pos[i,0] / box[0]) * nside)
-        iy = int((pos[i,1] / box[1]) * nside)
+        ix = int(pos[i,0] * bfactor)
+        iy = int(pos[i,1] * bfactor)
 
         p = counts[ix,iy]
         cells[ix,iy,p] = i
         counts[ix,iy] += 1
 
     for i in xrange(N):
-        ix = int((pos[i,0] / box[0]) * nside)
-        iy = int((pos[i,1] / box[1]) * nside)
+        ix = int(pos[i,0] * bfactor)
+        iy = int(pos[i,1] * bfactor)
 
         for tx in xrange(max(0,ix-1), min(ix+2, nside)):
             for ty in xrange(max(0,iy-1), min(iy+2, nside)):
                 for p in xrange(counts[tx,ty]):
-                    ind = cells[tx,ty,p]
-                    x = pos[i,0] - pos[ind,0]
-                    y = pos[i,1] - pos[ind,1]
-                    dist = sqrt(x*x + y*y)
+                    if p > i:
+                        ind = cells[tx,ty,p]
+                        x = pos[i,0] - pos[ind,0]
+                        y = pos[i,1] - pos[ind,1]
+                        distsq = x*x + y*y
 
-                    if dist < 2.0 and dist > 0:
-                        c = eps*(1-dist/2.0)**2
-                        f[i][0] += c * x/dist
-                        f[i][1] += c * y/dist
+                        if distsq < 4.0:
+                            dist = sqrt(distsq)
+                            c = eps*(1-dist/2.0)**2 / dist
+                            f[i][0] += c * x
+                            f[i][1] += c * y
+                            f[ind][0] -= c * x
+                            f[ind][1] -= c * y
     return f
 
 def force5(sim):
