@@ -150,8 +150,11 @@ class Moshpit(object):
 
     def relax(self):
         """ Relax the current configuration using just pair wise forces (no noise) """
+        v0tmp = self.v0
+
         for step in xrange(1000):
             self.forces = forces.force5(self) + self.force_damp()
             self.integrate(self.forces)
             self.boundary_condition()
 
+        self.v0 = v0tmp

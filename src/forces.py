@@ -112,3 +112,6 @@ def force5(sim):
 
     return _nbl_forces(cells, counts, nside, sim.box, sim.pos, sim.N, sim.epsilon, force)
 
+def warmup(sim):
+    for f in [force2, force3, force4, force5]:
+        f(sim)
