@@ -92,8 +92,9 @@ def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
         for tx in xrange(max(0,ix-1), min(ix+2, nside)):
             for ty in xrange(max(0,iy-1), min(iy+2, nside)):
                 for p in xrange(counts[tx,ty]):
-                    if p > i:
-                        ind = cells[tx,ty,p]
+                    ind = cells[tx,ty,p]
+
+                    if ind > i:
                         x = pos[i,0] - pos[ind,0]
                         y = pos[i,1] - pos[ind,1]
                         distsq = x*x + y*y
@@ -101,10 +102,11 @@ def _nbl_forces(cells, counts, nside, box, pos, N, eps, f):
                         if distsq < 4.0:
                             dist = sqrt(distsq)
                             c = eps*(1-dist/2.0)**2 / dist
-                            f[i][0] += c * x
-                            f[i][1] += c * y
-                            f[ind][0] -= c * x
-                            f[ind][1] -= c * y
+                            fx, fy = c*x, c*y
+                            f[i][0] += fx
+                            f[i][1] += fy
+                            f[ind][0] -= fx
+                            f[ind][1] -= fy
     return f
 
 def force5(sim):
